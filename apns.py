@@ -92,7 +92,14 @@ ER_IDENTIFER = 'identifier'
 class APNs(object):
     """A class representing an Apple Push Notification service connection"""
 
-    def __init__(self, use_sandbox=False, cert_file=None, key_file=None, enhanced=False):
+    def __init__(
+        self,
+        use_sandbox=False,
+        cert_file=None,
+        key_file=None,
+        ca_cert_file=None,
+        enhanced=False
+        ):
         """
         Set use_sandbox to True to use the sandbox (test) APNs servers.
         Default is False.
@@ -101,6 +108,7 @@ class APNs(object):
         self.use_sandbox = use_sandbox
         self.cert_file = cert_file
         self.key_file = key_file
+        self.ca_cert_file = ca_cert_file
         self._feedback_connection = None
         self._gateway_connection = None
         self.enhanced = enhanced
@@ -165,6 +173,7 @@ class APNs(object):
                 use_sandbox = self.use_sandbox,
                 cert_file = self.cert_file,
                 key_file = self.key_file,
+                ca_cert_file = self.ca_cert_file,
                 enhanced = self.enhanced
             )
         return self._gateway_connection
@@ -174,10 +183,18 @@ class APNsConnection(object):
     """
     A generic connection class for communicating with the APNs
     """
-    def __init__(self, cert_file=None, key_file=None, timeout=None, enhanced=False):
+    def __init__(
+        self,
+        cert_file=None,
+        key_file=None,
+        ca_cert_file=None,
+        timeout=None,
+        enhanced=False
+        ):
         super(APNsConnection, self).__init__()
         self.cert_file = cert_file
         self.key_file = key_file
+        self.ca_cert_file = ca_cert_file
         self.timeout = timeout
         self._socket = None
         self._ssl = None
@@ -203,8 +220,22 @@ class APNsConnection(object):
         if self.enhanced:
             self._last_activity_time = time.time()
             self._socket.setblocking(False)
-            self._ssl = wrap_socket(self._socket, self.key_file, self.cert_file,
-                                        do_handshake_on_connect=False)
+            if self.ca_cert_file is not None:
+                self._ssl = wrap_socket(
+                    self._socket,
+                    self.key_file,
+                    self.cert_file,
+                    ca_certs=self.ca_cert_file,
+                    do_handshake_on_connect=False
+                    )
+            else:
+                self._ssl = wrap_socket(
+                    self._socket,
+                    self.key_file,
+                    self.cert_file,
+                    do_handshake_on_connect=False
+                    )
+
             while True:
                 try:
                     self._ssl.do_handshake()
@@ -221,7 +252,19 @@ class APNsConnection(object):
             # Fallback for 'SSLError: _ssl.c:489: The handshake operation timed out'
             for i in range(3):
                 try:
-                    self._ssl = wrap_socket(self._socket, self.key_file, self.cert_file)
+                    if self.ca_cert_file is not None:
+                        self._ssl = wrap_socket(
+                            self._socket,
+                            self.key_file,
+                            self.cert_file,
+                            ca_certs=self.ca_cert_file,
+                            )
+                    else:
+                        self._ssl = wrap_socket(
+                            self._socket,
+                            self.key_file,
+                            self.cert_file,
+                            )
                     break
                 except SSLError as ex:
                     if ex.args[0] == SSL_ERROR_WANT_READ:
